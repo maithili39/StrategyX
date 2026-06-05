@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   AreaChart, Area
@@ -27,9 +27,6 @@ interface PredictionRecord {
 export default function App() {
   // Authentication State
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
-  const [username, setUsername] = useState('strategyx_admin');
-  const [password, setPassword] = useState('strategyx_password');
-  const [authError, setAuthError] = useState('');
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<'dashboard' | 'simulator' | 'streaming'>('dashboard');
@@ -71,32 +68,7 @@ export default function App() {
   const [wsConnected, setWsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
-  // Handle Login
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError('');
-    try {
-      const formData = new URLSearchParams();
-      formData.append('username', username);
-      formData.append('password', password);
 
-      const res = await fetch(`${API_BASE}/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: formData
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        localStorage.setItem('token', data.access_token);
-        setToken(data.access_token);
-      } else {
-        setAuthError('Incorrect username or password');
-      }
-    } catch (err) {
-      setAuthError('Failed to connect to authentication server.');
-    }
-  };
 
   // Fetch Database Logs History
   const fetchLogs = async () => {
@@ -257,68 +229,51 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (token) {
-      fetchLogs();
-    }
+    const autoLogin = async () => {
+      if (!token) {
+        try {
+          const formData = new URLSearchParams();
+          formData.append('username', 'strategyx_admin');
+          formData.append('password', 'strategyx_password');
+          const res = await fetch(`${API_BASE}/token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData
+          });
+          if (res.ok) {
+            const data = await res.json();
+            localStorage.setItem('token', data.access_token);
+            setToken(data.access_token);
+          }
+        } catch (err) {
+          console.error("Silent login failed:", err);
+        }
+      } else {
+        fetchLogs();
+      }
+    };
+    autoLogin();
   }, [token]);
 
-  // Handle Logout
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    setToken(null);
-  };
 
-  // Login Screen
+
+  // Login Screen (Transition / Silent Auth Spinner)
   if (!token) {
     return (
-      <div className="min-h-screen bg-darkBg text-white flex items-center justify-center font-sans">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,119,198,0.2),rgba(255,255,255,0))]" />
-        <div className="w-full max-w-md bg-darkCard border border-gray-800 rounded-2xl p-8 shadow-2xl relative z-10">
+      <div className="min-h-screen bg-darkBg text-slate-800 flex items-center justify-center font-sans">
+        <div className="text-center p-8 bg-white border border-slate-200 rounded-2xl shadow-xl max-w-sm w-full mx-4">
           <div className="flex justify-center mb-6">
-            <div className="w-12 h-12 bg-gradient-to-tr from-accentBlue to-accentPurple rounded-xl flex items-center justify-center shadow-lg">
+            <div className="w-12 h-12 bg-gradient-to-tr from-accentBlue to-accentPurple rounded-xl flex items-center justify-center shadow-lg animate-pulse">
               <Cpu className="w-6 h-6 text-white" />
             </div>
           </div>
-          <h2 className="text-3xl font-extrabold text-center bg-clip-text text-transparent bg-gradient-to-r from-accentBlue to-accentPurple mb-2">
-            StrategyX
+          <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-accentBlue to-accentPurple mb-2 font-outfit">
+            RetentionIQ
           </h2>
-          <p className="text-gray-400 text-center text-sm mb-8">
-            OTT subscriber fatigue classification control center
-          </p>
-
-          <form onSubmit={handleLogin} className="space-y-6">
-            <div>
-              <label className="block text-xs uppercase tracking-wider text-gray-400 mb-2 font-bold">Username</label>
-              <input 
-                type="text" 
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full bg-black border border-gray-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-accentBlue transition-colors"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs uppercase tracking-wider text-gray-400 mb-2 font-bold">Password</label>
-              <input 
-                type="password" 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-black border border-gray-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-accentBlue transition-colors"
-                required
-              />
-            </div>
-            {authError && (
-              <div className="text-red-500 text-xs font-bold text-center bg-red-900/20 border border-red-900/50 py-2 rounded-lg">
-                {authError}
-              </div>
-            )}
-            <button 
-              type="submit"
-              className="w-full bg-gradient-to-r from-accentBlue to-accentPurple hover:opacity-90 transition-opacity text-white font-bold py-3 px-4 rounded-lg shadow-lg"
-            >
-              Sign In
-            </button>
-          </form>
+          <div className="flex items-center justify-center space-x-2 text-slate-500 text-sm mt-4">
+            <RefreshCw className="w-4 h-4 animate-spin text-accentBlue" />
+            <span>Initializing Retention Intelligence Platform...</span>
+          </div>
         </div>
       </div>
     );
@@ -333,42 +288,36 @@ export default function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-darkBg text-white font-sans relative">
+    <div className="min-h-screen bg-darkBg text-slate-800 font-sans relative">
       {/* Top Navbar */}
-      <nav className="border-b border-gray-800 bg-black/40 backdrop-blur-md sticky top-0 z-50 px-8 py-4 flex items-center justify-between">
+      <nav className="border-b border-slate-200 bg-white/70 backdrop-blur-md sticky top-0 z-50 px-8 py-4 flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 bg-gradient-to-tr from-accentBlue to-accentPurple rounded-lg flex items-center justify-center">
             <Cpu className="w-4 h-4 text-white" />
           </div>
-          <span className="font-extrabold text-xl bg-clip-text text-transparent bg-gradient-to-r from-accentBlue to-accentPurple">
-            StrategyX Control Panel
+          <span className="font-extrabold text-xl bg-clip-text text-transparent bg-gradient-to-r from-accentBlue to-accentPurple font-outfit">
+            RetentionIQ Control Panel
           </span>
         </div>
 
         <div className="flex items-center space-x-6">
           <button 
             onClick={() => setActiveTab('dashboard')}
-            className={`text-sm font-bold transition-colors ${activeTab === 'dashboard' ? 'text-accentBlue' : 'text-gray-400 hover:text-white'}`}
+            className={`text-sm font-bold transition-colors ${activeTab === 'dashboard' ? 'text-accentBlue' : 'text-slate-500 hover:text-slate-900'}`}
           >
             Dashboard
           </button>
           <button 
             onClick={() => setActiveTab('simulator')}
-            className={`text-sm font-bold transition-colors ${activeTab === 'simulator' ? 'text-accentBlue' : 'text-gray-400 hover:text-white'}`}
+            className={`text-sm font-bold transition-colors ${activeTab === 'simulator' ? 'text-accentBlue' : 'text-slate-500 hover:text-slate-900'}`}
           >
             What-If Simulator
           </button>
           <button 
             onClick={() => setActiveTab('streaming')}
-            className={`text-sm font-bold transition-colors ${activeTab === 'streaming' ? 'text-accentBlue' : 'text-gray-400 hover:text-white'}`}
+            className={`text-sm font-bold transition-colors ${activeTab === 'streaming' ? 'text-accentBlue' : 'text-slate-500 hover:text-slate-900'}`}
           >
             WS Live Feed
-          </button>
-          <button 
-            onClick={handleLogout}
-            className="border border-gray-800 hover:border-red-900 hover:text-red-400 transition-colors rounded-lg px-4 py-2 text-xs font-bold"
-          >
-            Sign Out
           </button>
         </div>
       </nav>

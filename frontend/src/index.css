@@ -7,13 +7,13 @@
 
 /* ── CSS Design Tokens ──────────────────────────────────────────────────── */
 :root {
-  --bg-primary: #0b0f19;
-  --bg-card: #111827;
-  --accent-blue: #3b82f6;
-  --accent-purple: #8b5cf6;
-  --text-primary: #f1f5f9;
-  --text-muted: #6b7280;
-  --border-subtle: #1f2937;
+  --bg-primary: #f8fafc;
+  --bg-card: #ffffff;
+  --accent-blue: #2563eb;
+  --accent-purple: #7c3aed;
+  --text-primary: #0f172a;
+  --text-muted: #64748b;
+  --border-subtle: #e2e8f0;
 }
 
 /* ── Base Reset ─────────────────────────────────────────────────────────── */
@@ -41,38 +41,38 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #0b0f19;
+  background: #f1f5f9;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1f2937;
+  background: #cbd5e1;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #374151;
+  background: #94a3b8;
 }
 
 /* ── Custom Range Slider ────────────────────────────────────────────────── */
 input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
-  height: 4px;
-  border-radius: 2px;
-  background: #1f2937;
+  height: 6px;
+  border-radius: 3px;
+  background: #e2e8f0;
   outline: none;
 }
 
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: var(--accent-blue);
   cursor: pointer;
   transition: transform 0.15s ease;
-  box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 8px rgba(37, 99, 235, 0.4);
 }
 
 input[type="range"]::-webkit-slider-thumb:hover {
@@ -119,10 +119,10 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 /* ── Glassmorphism Utility ──────────────────────────────────────────────── */
 .glass {
-  background: rgba(17, 24, 39, 0.6);
+  background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 /* ── Gradient Text Utility ──────────────────────────────────────────────── */

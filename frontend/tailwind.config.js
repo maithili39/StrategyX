@@ -7,10 +7,10 @@ export default {
   theme: {
     extend: {
       colors: {
-        darkBg: '#0b0f19',
-        darkCard: '#111827',
-        accentBlue: '#3b82f6',
-        accentPurple: '#8b5cf6',
+        darkBg: '#f8fafc',
+        darkCard: '#ffffff',
+        accentBlue: '#2563eb',
+        accentPurple: '#7c3aed',
       }
     },
   },
