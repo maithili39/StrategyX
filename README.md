@@ -1,6 +1,6 @@
-# StrategyX: Production-Grade OTT Subscriber Fatigue Prediction System
+# RetentionIQ: Production-Grade OTT Subscriber Fatigue Prediction System
 
-StrategyX is an end-to-end enterprise machine learning system designed to predict subscriber fatigue (churn risk) for Over-The-Top (OTT) streaming platforms. It processes raw engagement indicators to identify behavior decay, classifies users into actionable business segments, and logs predictions for automated retention triggers.
+RetentionIQ is an end-to-end enterprise machine learning system designed to predict subscriber fatigue (churn risk) for Over-The-Top (OTT) streaming platforms. It processes raw engagement indicators to identify behavior decay, classifies users into actionable business segments, and logs predictions for automated retention triggers.
 
 This codebase is structured as a modular, production-ready microservice architecture.
 
@@ -16,7 +16,7 @@ This codebase is structured as a modular, production-ready microservice architec
    - Tracks training runs, log parameters (Optuna search trials), and saves metrics (ROC-AUC, F1, Brier Score).
    - Serializes and registers model pipeline binaries directly into the MLflow model store.
 3. **REST API Service (`src/api.py` & `src/auth.py`)**:
-   - Built with FastAPI to serve real-time predictions (`/predict` and `/predict/batch`) and model explanations (`/explain` via SHAP).
+   - Built with FastAPI to serve real-time predictions (`/predict` and `/predict/batch`), model explanations (`/explain` via SHAP), and subscriber lists (`/users/sample`).
    - Secured with OAuth2 Password Bearer flow and JWT access tokens to prevent unauthorized access.
    - Includes Pydantic V2 input validation on numerical features to reject out-of-bounds or malformed telemetry.
    - Utilizes asynchronous background tasks to handle high-volume batch prediction requests non-blockingly.
@@ -27,8 +27,9 @@ This codebase is structured as a modular, production-ready microservice architec
    - Listens to active user events from Kafka/Redpanda topic.
    - Automatically issues real-time inferences and broadcasts them back.
 6. **React Dashboard Frontend (`frontend/`)**:
-   - Modern dashboard built with React, Vite, Recharts, and Tailwind CSS.
-   - Features real-time dashboard metrics, interactive what-if simulation sandbox, and a live WebSocket telemetry feed.
+   - Modern dashboard built with React, Vite, and Tailwind CSS using a premium violet and pink light-mode color theme.
+   - Features an interactive Subscriber Churn Simulator allowing users to load real subscriber statistics directly from the database, adjust telemetry parameters, simulate risk, view SHAP explainers, log feedback conversions, and track logs in real-time.
+   - Features a live WebSocket telemetry feed to stream active user predictions.
 7. **Quality Assurance (`tests/`)**:
    - Automated unit and integration tests (`pytest`) covering feature engineering, database CRUD operations, and API security.
    - GitHub Actions CI pipeline automatically validating code builds on commit.
