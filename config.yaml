@@ -1,0 +1,47 @@
+# Configuration for OTT User Fatigue Prediction System
+
+data:
+  train_path: "ott_train.csv"
+  test_path: "ott_test.csv"
+  scaled_train_path: "ott_train_large.csv"
+  scaled_test_path: "ott_test_large.csv"
+  predictions_path: "SOZO_Predictions.csv"
+
+model:
+  save_dir: "models"
+  model_filename: "user_fatigue_pipeline.joblib"
+  features_filename: "features_list.joblib"
+  metrics_filename: "training_metrics.yaml"
+  random_state: 42
+  decision_threshold: 0.4568  # Defaults to optimal PR-F1 threshold from baseline tuning
+
+training:
+  cv_splits: 5
+  optuna_trials: 25
+  test_size: 0.2
+
+features:
+  id_column: "user_id"
+  target_column: "fatigue_label"
+  categorical_columns:
+    - "subscription_tier"
+  numerical_columns:
+    - "tenure_days"
+    - "avg_daily_minutes_last_7d"
+    - "avg_daily_minutes_last_30d"
+    - "sessions_last_7d"
+    - "sessions_last_30d"
+    - "avg_completion_rate"
+    - "unique_genres_watched_30d"
+    - "days_since_last_session"
+    - "binge_sessions_last_30d"
+    - "peak_hour_viewing_pct"
+    - "original_content_pct"
+    - "recommendation_click_rate"
+
+database:
+  url: "sqlite:///strategyx.db"
+
+mlflow:
+  tracking_uri: "sqlite:///mlflow.db"
+  experiment_name: "ott_user_fatigue_predictions"

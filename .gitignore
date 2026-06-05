@@ -1,0 +1,20 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Databases & local runs
+*.db
+mlruns/
+
+# Large generated data files
+*_large.csv
+SOZO_Predictions.csv
+
+# Models (should be registered in MLflow Model Registry or S3, not git)
+models/*.joblib
+models/*.pkl

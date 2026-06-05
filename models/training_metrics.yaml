@@ -1,0 +1,22 @@
+best_cv_auc: 0.918767598525724
+best_f1_score: 0.7469287464287739
+best_params:
+  colsample_bytree: 0.9190263277030083
+  gamma: 0.0016006332679335822
+  learning_rate: 0.015826150740947356
+  max_depth: 3
+  min_child_weight: 8
+  n_estimators: 374
+  subsample: 0.7022771730887382
+brier_score: 0.08715127408504486
+confusion_matrix:
+  false_negatives: 106
+  false_positives: 100
+  true_negatives: 1490
+  true_positives: 304
+dataset_used: database_records_10000
+num_records: 10000
+optimal_threshold: 0.5728311538696289
+precision: 0.7524752475247525
+recall: 0.7414634146341463
+validation_auc: 0.9057524160147262
