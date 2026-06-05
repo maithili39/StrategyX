@@ -46,12 +46,28 @@ def save_prediction(db: Session, pred_dict: dict):
         predicted_probability=pred_dict['fatigue_probability'],
         fatigue_flag=int(pred_dict['is_fatigued']),
         risk_level=pred_dict['risk_level'],
-        business_archetype=pred_dict['business_archetype']
+        business_archetype=pred_dict['business_archetype'],
+        retention_action_triggered=pred_dict.get('retention_action_triggered'),
+        conversion_success=pred_dict.get('conversion_success')
     )
     db.add(db_pred)
     db.commit()
     db.refresh(db_pred)
     return db_pred
+
+def update_prediction_feedback(db: Session, user_id: str, conversion_success: int, retention_action: str = None):
+    """
+    Updates the most recent prediction feedback for a subscriber.
+    """
+    pred = db.query(DBPrediction).filter(DBPrediction.user_id == user_id).order_by(DBPrediction.timestamp.desc()).first()
+    if pred:
+        pred.conversion_success = conversion_success
+        if retention_action:
+            pred.retention_action_triggered = retention_action
+        db.commit()
+        db.refresh(pred)
+        return pred
+    return None
 
 def save_batch_predictions(db: Session, pred_df: pd.DataFrame):
     """
@@ -64,7 +80,9 @@ def save_batch_predictions(db: Session, pred_df: pd.DataFrame):
             "predicted_probability": r["predicted_fatigue_probability"],
             "fatigue_flag": int(r["fatigue_flag"]),
             "risk_level": r["risk_level"],
-            "business_archetype": r["business_archetype"]
+            "business_archetype": r["business_archetype"],
+            "retention_action_triggered": r.get("retention_action_triggered"),
+            "conversion_success": r.get("conversion_success")
         }
         for r in records
     ]
@@ -84,7 +102,9 @@ def get_prediction_history(db: Session, limit: int = 100) -> list[dict]:
             "fatigue_flag": p.fatigue_flag,
             "risk_level": p.risk_level,
             "business_archetype": p.business_archetype,
-            "timestamp": p.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            "timestamp": p.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+            "retention_action_triggered": p.retention_action_triggered,
+            "conversion_success": p.conversion_success
         }
         for p in preds
     ]

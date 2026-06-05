@@ -2,8 +2,9 @@ import io
 import os
 import sys
 import pandas as pd
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, BackgroundTasks, status
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, BackgroundTasks, status, WebSocket, WebSocketDisconnect
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.predict import FatiguePredictor
 from src.db.database import get_db
+from src.db.crud import update_prediction_feedback
 from src.auth import get_current_user, verify_password, create_access_token, ADMIN_USERNAME, ADMIN_PASSWORD_HASH
 from src.logger import api_logger
 
@@ -18,6 +20,15 @@ app = FastAPI(
     title="StrategyX Production Churn API",
     description="Secured high-scale REST microservice with JWT auth, structured JSON logging, and asynchronous task offloading.",
     version="2.0.0"
+)
+
+# CORS: allow React dev server (port 5173) and containerised frontend (port 3000)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Instantiate predictor (loads model on startup)
@@ -233,3 +244,86 @@ def predict_batch_users(
     except Exception as e:
         api_logger.error(f"Batch prediction trigger error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Batch trigger error: {str(e)}")
+
+class FeedbackRequest(BaseModel):
+    user_id: str
+    conversion_success: int = Field(..., ge=0, le=1)
+    retention_action_triggered: str = Field(None, description="The action blueprint that was triggered")
+
+class FeedbackResponse(BaseModel):
+    user_id: str
+    status: str
+    conversion_success: int
+    retention_action_triggered: str = None
+
+@app.post("/feedback", response_model=FeedbackResponse)
+def submit_prediction_feedback(
+    request: FeedbackRequest,
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user)
+):
+    """
+    Submits feedback on a subscriber's retention action conversion status.
+    Updates the most recent prediction history record for analytics and retraining.
+    Secured: Requires a valid OAuth2 Bearer token.
+    """
+    updated_record = update_prediction_feedback(
+        db=db,
+        user_id=request.user_id,
+        conversion_success=request.conversion_success,
+        retention_action=request.retention_action_triggered
+    )
+    if not updated_record:
+        raise HTTPException(status_code=404, detail=f"No prediction record found for user {request.user_id}")
+        
+    api_logger.info(
+        f"Logged conversion feedback for user {request.user_id}: {request.conversion_success}",
+        extra={"extra_attrs": {
+            "user_id": request.user_id,
+            "conversion_success": request.conversion_success,
+            "retention_action": request.retention_action_triggered,
+            "updated_by": current_user
+        }}
+    )
+    return {
+        "user_id": updated_record.user_id,
+        "status": "Success",
+        "conversion_success": updated_record.conversion_success,
+        "retention_action_triggered": updated_record.retention_action_triggered
+    }
+
+@app.websocket("/ws/predict")
+async def websocket_predict_endpoint(websocket: WebSocket):
+    """
+    WebSocket channel for live, real-time subscriber diagnostics.
+    Accepts user telemetry, returns fatigue classification and SHAP explainer attributes.
+    """
+    await websocket.accept()
+    api_logger.info("Real-time prediction WebSocket client connected.")
+    try:
+        while True:
+            # Expect client to stream telemetry JSON matching UserStatsRequest fields (minus user_id)
+            data = await websocket.receive_json()
+            user_id = data.get("user_id", "STREAMING_WS_USER")
+            
+            # Predict single
+            if not predictor.is_model_loaded():
+                await websocket.send_json({"error": "ML model is not loaded on server."})
+                continue
+                
+            res = predictor.predict_single(data)
+            
+            # Include SHAP explanation key metrics
+            shaps = predictor.explain_single(data)
+            res["shap_explanation"] = shaps[:5] # Top 5 drivers
+            
+            await websocket.send_json(res)
+    except WebSocketDisconnect:
+        api_logger.info("Real-time prediction WebSocket client disconnected.")
+    except Exception as e:
+        api_logger.error(f"WebSocket execution error: {e}", exc_info=True)
+        try:
+            await websocket.send_json({"error": str(e)})
+        except Exception:
+            pass
+

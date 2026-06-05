@@ -2,7 +2,7 @@ xgboost
 shap
 imbalanced-learn
 pandas
-numpy
+numpy==1.26.4
 matplotlib
 scikit-learn
 optuna
@@ -18,4 +18,7 @@ mlflow
 python-jose[cryptography]
 passlib[bcrypt]
 psycopg2-binary
+feast
+kafka-python-ng
+
 

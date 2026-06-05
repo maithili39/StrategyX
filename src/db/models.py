@@ -32,6 +32,8 @@ class DBPrediction(Base):
     risk_level = Column(String, nullable=False)
     business_archetype = Column(String, nullable=False)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    retention_action_triggered = Column(String, nullable=True)
+    conversion_success = Column(Integer, nullable=True)  # 1: Success (stayed), 0: Failure (churned), None: Not tracked
 
 class DBTrainingRun(Base):
     __tablename__ = "training_runs"
