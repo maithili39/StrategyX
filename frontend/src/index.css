@@ -9,8 +9,8 @@
 :root {
   --bg-primary: #f8fafc;
   --bg-card: #ffffff;
-  --accent-blue: #2563eb;
-  --accent-purple: #7c3aed;
+  --accent-blue: #7c3aed;
+  --accent-purple: #db2777;
   --text-primary: #0f172a;
   --text-muted: #64748b;
   --border-subtle: #e2e8f0;
@@ -72,7 +72,7 @@ input[type="range"]::-webkit-slider-thumb {
   background: var(--accent-blue);
   cursor: pointer;
   transition: transform 0.15s ease;
-  box-shadow: 0 0 8px rgba(37, 99, 235, 0.4);
+  box-shadow: 0 0 8px rgba(124, 58, 237, 0.4);
 }
 
 input[type="range"]::-webkit-slider-thumb:hover {

@@ -292,6 +292,41 @@ def submit_prediction_feedback(
         "retention_action_triggered": updated_record.retention_action_triggered
     }
 
+@app.get("/users/sample")
+def get_sample_users(
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user)
+):
+    """
+    Returns a sample of real users from the database for simulation / telemetry demonstration.
+    """
+    from src.db.models import DBUser
+    import random
+    users = db.query(DBUser).all()
+    if not users:
+        return []
+    # Sample up to 50 users
+    sampled = random.sample(users, min(len(users), 50))
+    return [
+        {
+            "user_id": u.user_id,
+            "tenure_days": u.tenure_days,
+            "subscription_tier": u.subscription_tier,
+            "avg_daily_minutes_last_7d": u.avg_daily_minutes_last_7d,
+            "avg_daily_minutes_last_30d": u.avg_daily_minutes_last_30d,
+            "sessions_last_7d": u.sessions_last_7d,
+            "sessions_last_30d": u.sessions_last_30d,
+            "avg_completion_rate": u.avg_completion_rate,
+            "unique_genres_watched_30d": u.unique_genres_watched_30d,
+            "days_since_last_session": u.days_since_last_session,
+            "binge_sessions_last_30d": u.binge_sessions_last_30d,
+            "peak_hour_viewing_pct": u.peak_hour_viewing_pct,
+            "original_content_pct": u.original_content_pct,
+            "recommendation_click_rate": u.recommendation_click_rate
+        }
+        for u in sampled
+    ]
+
 @app.websocket("/ws/predict")
 async def websocket_predict_endpoint(websocket: WebSocket):
     """

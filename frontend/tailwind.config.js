@@ -9,8 +9,8 @@ export default {
       colors: {
         darkBg: '#f8fafc',
         darkCard: '#ffffff',
-        accentBlue: '#2563eb',
-        accentPurple: '#7c3aed',
+        accentBlue: '#7c3aed',
+        accentPurple: '#db2777',
       }
     },
   },

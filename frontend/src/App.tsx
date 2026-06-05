@@ -29,6 +29,7 @@ export default function App() {
   // Dashboard Metrics & Logs
   const [history, setHistory] = useState<PredictionRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [realUsers, setRealUsers] = useState<any[]>([]);
 
 
   // What-If Simulator Settings
@@ -198,24 +199,44 @@ export default function App() {
   // Push mock event over WebSocket
   const sendMockWsEvent = () => {
     if (!wsRef.current || !wsConnected) return;
-    const randomUser = `U${Math.floor(Math.random() * 900000) + 100000}`;
-    const payload = {
-      user_id: randomUser,
-      tenure_days: Math.floor(Math.random() * 400) + 10,
-      subscription_tier: ["Basic", "Standard", "Premium"][Math.floor(Math.random() * 3)],
-      avg_daily_minutes_last_7d: parseFloat((Math.random() * 45).toFixed(1)),
-      avg_daily_minutes_last_30d: parseFloat((Math.random() * 50).toFixed(1)),
-      sessions_last_7d: Math.floor(Math.random() * 10),
-      sessions_last_30d: Math.floor(Math.random() * 40) + 10,
-      avg_completion_rate: parseFloat(Math.random().toFixed(2)),
-      unique_genres_watched_30d: Math.floor(Math.random() * 8) + 1,
-      days_since_last_session: Math.floor(Math.random() * 10),
-      binge_sessions_last_30d: Math.floor(Math.random() * 5),
-      peak_hour_viewing_pct: parseFloat((Math.random() * 100).toFixed(1)),
-      original_content_pct: parseFloat((Math.random() * 100).toFixed(1)),
-      recommendation_click_rate: parseFloat(Math.random().toFixed(2))
-    };
+    let payload;
+    if (realUsers.length > 0) {
+      const randomUserRecord = realUsers[Math.floor(Math.random() * realUsers.length)];
+      payload = { ...randomUserRecord };
+    } else {
+      const randomUser = `U${Math.floor(Math.random() * 900000) + 100000}`;
+      payload = {
+        user_id: randomUser,
+        tenure_days: Math.floor(Math.random() * 400) + 10,
+        subscription_tier: ["Basic", "Standard", "Premium"][Math.floor(Math.random() * 3)],
+        avg_daily_minutes_last_7d: parseFloat((Math.random() * 45).toFixed(1)),
+        avg_daily_minutes_last_30d: parseFloat((Math.random() * 50).toFixed(1)),
+        sessions_last_7d: Math.floor(Math.random() * 10),
+        sessions_last_30d: Math.floor(Math.random() * 40) + 10,
+        avg_completion_rate: parseFloat(Math.random().toFixed(2)),
+        unique_genres_watched_30d: Math.floor(Math.random() * 8) + 1,
+        days_since_last_session: Math.floor(Math.random() * 10),
+        binge_sessions_last_30d: Math.floor(Math.random() * 5),
+        peak_hour_viewing_pct: parseFloat((Math.random() * 100).toFixed(1)),
+        original_content_pct: parseFloat((Math.random() * 100).toFixed(1)),
+        recommendation_click_rate: parseFloat(Math.random().toFixed(2))
+      };
+    }
     wsRef.current.send(JSON.stringify(payload));
+  };
+
+  const fetchRealUsers = async (authToken: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/users/sample`, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRealUsers(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch real sample users:", err);
+    }
   };
 
   useEffect(() => {
@@ -240,6 +261,7 @@ export default function App() {
         }
       } else {
         fetchLogs();
+        fetchRealUsers(token);
       }
     };
     autoLogin();
@@ -318,6 +340,37 @@ export default function App() {
               {/* Input Sliders */}
               <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-6 space-y-6 shadow-sm">
                 <h3 className="text-lg font-bold text-slate-900 font-outfit">Simulator Telemetry Settings</h3>
+                
+                {realUsers.length > 0 && (
+                  <div>
+                    <label className="block text-xs text-slate-500 uppercase font-bold mb-2">Load Real Subscriber Profile</label>
+                    <select 
+                      onChange={(e) => {
+                        const selectedVal = e.target.value;
+                        if (!selectedVal) return;
+                        const user = realUsers.find(u => u.user_id === selectedVal);
+                        if (user) {
+                          setSimUserId(user.user_id);
+                          setSimTenure(user.tenure_days);
+                          setSimTier(user.subscription_tier);
+                          setSimMin30(user.avg_daily_minutes_last_30d);
+                          setSimMin7(user.avg_daily_minutes_last_7d);
+                          setSimCompletion(user.avg_completion_rate);
+                          setSimDaysSince(user.days_since_last_session);
+                          setSimClickRate(user.recommendation_click_rate);
+                        }
+                      }}
+                      className="w-full bg-slate-50 border border-slate-200 rounded px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-accentBlue font-medium"
+                    >
+                      <option value="">-- Choose Subscriber --</option>
+                      {realUsers.map((u, idx) => (
+                        <option key={idx} value={u.user_id}>
+                          {u.user_id} ({u.subscription_tier})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 
                 <div>
                   <label className="block text-xs text-slate-500 uppercase font-bold mb-2">Subscriber ID</label>
