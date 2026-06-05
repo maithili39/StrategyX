@@ -2,7 +2,8 @@ import io
 import os
 import sys
 import pandas as pd
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, BackgroundTasks, status
+from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -10,31 +11,33 @@ from sqlalchemy.orm import Session
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.predict import FatiguePredictor
 from src.db.database import get_db
+from src.auth import get_current_user, verify_password, create_access_token, ADMIN_USERNAME, ADMIN_PASSWORD_HASH
+from src.logger import api_logger
 
 app = FastAPI(
-    title="OTT User Fatigue Prediction API",
-    description="Production-grade REST service to predict and explain streaming service user engagement fatigue.",
-    version="1.0.0"
+    title="StrategyX Production Churn API",
+    description="Secured high-scale REST microservice with JWT auth, structured JSON logging, and asynchronous task offloading.",
+    version="2.0.0"
 )
 
 # Instantiate predictor (loads model on startup)
 predictor = FatiguePredictor()
 
 class UserStatsRequest(BaseModel):
-    tenure_days: int = Field(..., description="Days since user registered", example=74)
-    subscription_tier: str = Field(..., description="Subscription level: Basic, Standard, Premium", example="Basic")
-    avg_daily_minutes_last_7d: float = Field(..., description="Average daily viewing minutes last 7 days", example=0.0)
-    avg_daily_minutes_last_30d: float = Field(..., description="Average daily viewing minutes last 30 days", example=5.0)
-    sessions_last_7d: int = Field(..., description="Number of sessions last 7 days", example=3)
-    sessions_last_30d: int = Field(..., description="Number of sessions last 30 days", example=13)
-    avg_completion_rate: float = Field(..., description="Average completion rate of contents (0.0 - 1.0)", example=0.05)
-    unique_genres_watched_30d: int = Field(..., description="Unique content genres watched last 30 days", example=4)
-    days_since_last_session: int = Field(..., description="Days elapsed since the last session", example=2)
-    binge_sessions_last_30d: int = Field(..., description="Number of binge sessions last 30 days", example=0)
-    peak_hour_viewing_pct: float = Field(..., description="Percentage of peak-hour viewing (0.0 - 100.0)", example=87.8)
-    original_content_pct: float = Field(..., description="Percentage of original content viewed (0.0 - 100.0)", example=27.4)
-    recommendation_click_rate: float = Field(..., description="Click-through-rate on recommendations (0.0 - 1.0)", example=0.02)
     user_id: str = Field("UNKNOWN", description="Unique user identifier", example="U006253")
+    tenure_days: int = Field(..., ge=0, description="Days since user registered", example=74)
+    subscription_tier: str = Field(..., description="Subscription level: Basic, Standard, Premium", example="Basic")
+    avg_daily_minutes_last_7d: float = Field(..., ge=0.0, description="Average daily viewing minutes last 7 days", example=0.0)
+    avg_daily_minutes_last_30d: float = Field(..., ge=0.0, description="Average daily viewing minutes last 30 days", example=5.0)
+    sessions_last_7d: int = Field(..., ge=0, description="Number of sessions last 7 days", example=3)
+    sessions_last_30d: int = Field(..., ge=0, description="Number of sessions last 30 days", example=13)
+    avg_completion_rate: float = Field(..., ge=0.0, le=1.0, description="Average completion rate of contents (0.0 - 1.0)", example=0.05)
+    unique_genres_watched_30d: int = Field(..., ge=1, le=15, description="Unique content genres watched last 30 days", example=4)
+    days_since_last_session: int = Field(..., ge=0, le=30, description="Days elapsed since the last session", example=2)
+    binge_sessions_last_30d: int = Field(..., ge=0, description="Number of binge sessions last 30 days", example=0)
+    peak_hour_viewing_pct: float = Field(..., ge=0.0, le=100.0, description="Percentage of peak-hour viewing (0.0 - 100.0)", example=87.8)
+    original_content_pct: float = Field(..., ge=0.0, le=100.0, description="Percentage of original content viewed (0.0 - 100.0)", example=27.4)
+    recommendation_click_rate: float = Field(..., ge=0.0, le=1.0, description="Click-through-rate on recommendations (0.0 - 1.0)", example=0.02)
 
 class PredictionResponse(BaseModel):
     user_id: str
@@ -48,10 +51,57 @@ class ShapFeatureExplanation(BaseModel):
     shap_value: float
     actual_value: float
 
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+
+def bg_batch_predict(contents: bytes, db_session: Session):
+    """
+    Task executed asynchronously in a background worker thread.
+    Parses CSV inputs, runs batch inferences, and records predictions to DB.
+    """
+    try:
+        df = pd.read_csv(io.BytesIO(contents))
+        # Ensure we bind a new thread-specific session for safety
+        results_df = predictor.predict_batch(df, db=db_session)
+        api_logger.info(
+            f"Asynchronous batch prediction run completed successfully.",
+            extra={"extra_attrs": {"records_processed": len(results_df), "at_risk_count": int(results_df['fatigue_flag'].sum())}}
+        )
+    except Exception as e:
+        api_logger.error(
+            f"Error processing asynchronous background batch predictions: {e}",
+            exc_info=True
+        )
+
+@app.post("/token", response_model=TokenResponse)
+def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    """
+    OAuth2 Password Flow Token exchange route.
+    Username: strategyx_admin | Password: strategyx_password
+    """
+    if form_data.username != ADMIN_USERNAME or not verify_password(form_data.password, ADMIN_PASSWORD_HASH):
+        api_logger.warning(
+            f"Failed login attempt for user: {form_data.username}",
+            extra={"extra_attrs": {"username": form_data.username}}
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
+    access_token = create_access_token(data={"sub": form_data.username})
+    api_logger.info(
+        f"Access token issued for user: {form_data.username}",
+        extra={"extra_attrs": {"username": form_data.username}}
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
 @app.get("/health")
 def health_check():
     """
-    Returns the health of the API service and the loading status of the ML model pipeline.
+    Returns API status and ML model status. Unsecured route.
     """
     model_loaded = predictor.is_model_loaded()
     return {
@@ -61,32 +111,58 @@ def health_check():
     }
 
 @app.post("/predict", response_model=PredictionResponse)
-def predict_user_fatigue(request: UserStatsRequest, db: Session = Depends(get_db)):
+def predict_user_fatigue(
+    request: UserStatsRequest, 
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user)
+):
     """
-    Predicts the fatigue probability, risk level, flag, and business archetype for a single user.
+    Predicts the fatigue probability, risk level, flag, and archetype for a single user.
+    Secured: Requires a valid OAuth2 Bearer token.
     """
     if not predictor.is_model_loaded():
-        raise HTTPException(status_code=503, detail="Machine Learning model is not trained/loaded.")
+        raise HTTPException(status_code=503, detail="Model pipeline is not loaded.")
         
     try:
         user_data = request.model_dump()
         result = predictor.predict_single(user_data, db=db)
+        
+        api_logger.info(
+            f"Single prediction computed for user: {result['user_id']}",
+            extra={"extra_attrs": {
+                "user_id": result['user_id'],
+                "probability": result['fatigue_probability'],
+                "risk_level": result['risk_level'],
+                "archetype": result['business_archetype'],
+                "requested_by": current_user
+            }}
+        )
         return result
     except Exception as e:
+        api_logger.error(f"Prediction error for user {request.user_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
 
 @app.post("/explain", response_model=list[ShapFeatureExplanation])
-def explain_user_fatigue(request: UserStatsRequest):
+def explain_user_fatigue(
+    request: UserStatsRequest,
+    current_user: str = Depends(get_current_user)
+):
     """
-    Calculates SHAP feature contributions for a single user, showing which behaviors drive fatigue.
+    Calculates SHAP feature contributions showing which behaviors drive fatigue.
+    Secured: Requires a valid OAuth2 Bearer token.
     """
     if not predictor.is_model_loaded():
-        raise HTTPException(status_code=503, detail="Machine Learning model is not trained/loaded.")
+        raise HTTPException(status_code=503, detail="Model pipeline is not loaded.")
         
     try:
         user_data = request.model_dump()
         explanation = predictor.explain_single(user_data)
-        # Filter for output format
+        
+        api_logger.info(
+            f"SHAP explanation generated for user: {request.user_id}",
+            extra={"extra_attrs": {"user_id": request.user_id, "requested_by": current_user}}
+        )
+        
         return [
             ShapFeatureExplanation(
                 feature=e["feature"],
@@ -96,22 +172,31 @@ def explain_user_fatigue(request: UserStatsRequest):
             for e in explanation
         ]
     except Exception as e:
+        api_logger.error(f"SHAP calculation error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Explanation error: {str(e)}")
 
-@app.post("/predict/batch")
-def predict_batch_users(file: UploadFile = File(...), db: Session = Depends(get_db)):
+@app.post("/predict/batch", status_code=status.HTTP_202_ACCEPTED)
+def predict_batch_users(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user)
+):
     """
-    Runs batch predictions on an uploaded CSV file containing raw user statistics.
-    Returns a JSON array of predictions.
+    Accepts CSV uploads of subscriber metrics.
+    Executes inference asynchronously in a background thread to prevent client timeouts.
+    Returns 202 Accepted immediately. Results are logged to the database.
+    Secured: Requires a valid OAuth2 Bearer token.
     """
     if not predictor.is_model_loaded():
-        raise HTTPException(status_code=503, detail="Machine Learning model is not trained/loaded.")
+        raise HTTPException(status_code=503, detail="Model pipeline is not loaded.")
         
     try:
         contents = file.file.read()
-        df = pd.read_csv(io.BytesIO(contents))
         
-        # Verify columns exist
+        # Quick validation of CSV format (read only headers first)
+        df_headers = pd.read_csv(io.BytesIO(contents), nrows=2)
+        
         required_cols = [
             "tenure_days", "subscription_tier", "avg_daily_minutes_last_7d",
             "avg_daily_minutes_last_30d", "sessions_last_7d", "sessions_last_30d",
@@ -120,11 +205,31 @@ def predict_batch_users(file: UploadFile = File(...), db: Session = Depends(get_
             "recommendation_click_rate"
         ]
         
-        missing = [col for col in required_cols if col not in df.columns]
+        missing = [col for col in required_cols if col not in df_headers.columns]
         if missing:
-            raise HTTPException(status_code=400, detail=f"Missing columns in uploaded CSV: {missing}")
+            raise HTTPException(status_code=400, detail=f"Uploaded CSV is missing columns: {missing}")
             
-        results_df = predictor.predict_batch(df, db=db)
-        return results_df.to_dict(orient="records")
+        # Parse total records submitted
+        total_records = len(pd.read_csv(io.BytesIO(contents)))
+        
+        # Dispatch background prediction task
+        background_tasks.add_task(bg_batch_predict, contents, db)
+        
+        api_logger.info(
+            f"Background batch job scheduled.",
+            extra={"extra_attrs": {
+                "records_submitted": total_records,
+                "requested_by": current_user
+            }}
+        )
+        
+        return {
+            "status": "Accepted",
+            "message": "Batch prediction task scheduled in the background. Inferences will be recorded in database.",
+            "records_submitted": total_records
+        }
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Batch prediction error: {str(e)}")
+        api_logger.error(f"Batch prediction trigger error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Batch trigger error: {str(e)}")

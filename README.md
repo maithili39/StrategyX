@@ -15,13 +15,17 @@ This codebase has been scaled from a prototype Jupyter Notebook into a modular, 
 2. **MLflow Experiment Tracking (MLOps)**:
    - Tracks training runs, log parameters (Optuna search trials), and saves metrics (ROC-AUC, F1, Brier Score).
    - Serializes and registers model pipeline binaries directly into the MLflow model store.
-3. **REST API Service (`src/api.py`)**:
-   - Built with **FastAPI** to serve real-time predictions (`/predict` and `/predict/batch`) and model explanation coefficients (`/explain` via SHAP).
+3. **REST API Service (`src/api.py` & `src/auth.py`)**:
+   - Built with **FastAPI** to serve real-time predictions (`/predict` and `/predict/batch`) and model explanations (`/explain` via SHAP).
+   - Secured with **OAuth2 Password Bearer flow and JWT access tokens** to prevent unauthorized access.
+   - Includes **Pydantic V2 input validation** on numerical features to reject out-of-bounds/malformed telemetry.
+   - Utilizes asynchronous **BackgroundTasks** to handle high-volume batch prediction requests non-blockingly without database locks or server timeouts.
+   - Outputs structured **JSON logs** containing performance and audit attributes for aggregators.
 4. **Streamlit Analytical Dashboard (`src/app.py`)**:
    - Displays real-time database KPIs, segment proportions, API prediction histories, and historical training sessions.
    - Includes a simulator sandbox to simulate user behaviors and view real-time changes in churn probability.
 5. **Quality Assurance (`tests/`)**:
-   - Automated unit tests (`pytest`) covering feature calculations, capping, and database CRUD sessions.
+   - Automated unit and integration tests (`pytest`) covering feature engineering, database CRUD operations, and API token security checks.
    - **GitHub Actions** CI pipeline automatically validating code builds on commit.
 
 ---
@@ -30,13 +34,15 @@ This codebase has been scaled from a prototype Jupyter Notebook into a modular, 
 
 - `src/`: Core Python packages.
   - `db/`: Database configuration, ORM models, and CRUD operations.
+  - `auth.py`: OAuth2 authentication handlers, password hashing, and token issuance.
+  - `logger.py`: JSON structured logger setup.
   - `data_generator.py`: Synthetic database generator to scale test subscriber bases.
   - `features.py`: Feature engineering functions and capping transformers.
   - `train.py`: Model tuning and MLflow training pipeline.
   - `predict.py`: Inference wrapper with SHAP and business archetype mapping.
-  - `api.py`: FastAPI server script.
+  - `api.py`: Secured FastAPI server.
   - `app.py`: Streamlit control center dashboard.
-- `tests/`: Automated unit tests folder.
+- `tests/`: Automated unit and API security tests folder.
 - `Dockerfile`: Multi-stage Docker config for containerized execution.
 - `.github/workflows/ci.yml`: GitHub Actions automated pytest checker.
 - `config.yaml`: Centralized configuration variables.
@@ -80,7 +86,11 @@ Start the FastAPI server:
 ```bash
 uvicorn src.api:app --reload
 ```
-View Swagger API documentation at: `http://127.0.0.1:8000/docs`
+View Swagger API documentation and authenticate at: `http://127.0.0.1:8000/docs`
+- Use the **Authorize** padlock button.
+- Default Admin credentials:
+  - **Username**: `strategyx_admin`
+  - **Password**: `strategyx_password`
 
 ### 6. Open MLflow Dashboard
 Inspect training metrics and serialized model binaries:

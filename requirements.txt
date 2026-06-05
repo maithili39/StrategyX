@@ -15,3 +15,5 @@ pyyaml
 pytest
 sqlalchemy
 mlflow
+python-jose[cryptography]
+passlib[bcrypt]
