@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: strategyx_db
+    environment:
+      POSTGRES_DB: strategyx
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d strategyx"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mlflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: strategyx_mlflow
+    command: mlflow server --backend-store-uri postgresql://postgres:postgres_password@db:5432/mlflow --artifacts-destination /mlflow_artifacts --host 0.0.0.0 --port 5000 --serve-artifacts
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_data:/mlflow_artifacts
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: strategyx_api
+    command: uvicorn src.api:app --host 0.0.0.0 --port 8000
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres_password@db:5432/strategyx
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - JWT_SECRET_KEY=09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7
+    ports:
+      - "8000:8000"
+    volumes:
+      - shared_models:/app/models
+    depends_on:
+      db:
+        condition: service_healthy
+      mlflow:
+        condition: service_started
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: strategyx_dashboard
+    command: streamlit run src/app.py --server.port=8501 --server.address=0.0.0.0
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres_password@db:5432/strategyx
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    ports:
+      - "8501:8501"
+    volumes:
+      - shared_models:/app/models
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  mlflow_data:
+  shared_models:
